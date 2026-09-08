@@ -6,9 +6,16 @@ Leftovers from moving this project out of PRIMES-Conjectures (2026-09-08).
 
 - [ ] Delete the empty typo-spelled repo `shumow/memeotry` if it still exists
       (nothing was ever pushed to it; this repo, `Memoetry`, is the real one).
+      *Checked 2026-09-08: it still exists and is still empty (zero refs).
+      Repo deletion needs the web UI (Settings → Danger Zone) or an
+      admin-scoped token, so it stays manual.*
 - [ ] Delete the branch `claude/meme-poetry-database-4pn6ff` in
       `shumow/PRIMES-Conjectures`. The meme-poetry work was force-pushed away
       and the branch now points at the same commit as `main`, so it is inert.
+      *Checked 2026-09-08: confirmed inert (same SHA as `main`, 37cc491), but
+      the branch-delete push is blocked by the remote session's egress policy
+      (HTTP 403), so it also stays manual: delete it from the branches page or
+      run `git push origin --delete claude/meme-poetry-database-4pn6ff`.*
 
 ## Notes
 
@@ -19,5 +26,10 @@ Leftovers from moving this project out of PRIMES-Conjectures (2026-09-08).
 ## Possible next steps
 
 - [ ] Seed the corpus with real sightings (`./memepoetry.py import`).
-- [ ] Instagram oEmbed-based URL canonicalizer, so pasted share links get
+      *Needs hand-collected data (see README, "On collecting the data") —
+      copy lines and share URLs as you browse; nothing to automate here.*
+- [x] Instagram oEmbed-based URL canonicalizer, so pasted share links get
       normalized to the stable `/p/<shortcode>/` or `/reel/<shortcode>/` form.
+      *Done 2026-09-08: `canonicalize_url()` runs on `add`/`import`/`lookup`,
+      plus a `canon` subcommand and `--resolve` for opaque `/share/` links
+      (oEmbed via `INSTAGRAM_OEMBED_TOKEN`, redirect fallback).*

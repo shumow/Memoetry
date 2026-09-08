@@ -41,6 +41,7 @@ SQLite (single file, `data/memepoetry.sqlite3`) with FTS5 full-text search:
 ./memepoetry.py add --text "we were a museum of almosts" \
     --url "https://www.instagram.com/p/XXXX/" --account someaccount --post-type reel
 ./memepoetry.py import seed.example.jsonl     # bulk JSONL, or `-` for stdin
+./memepoetry.py canon "https://instagram.com/reels/XXXX/?igsh=abc"
 ./memepoetry.py search "moon OR stars"        # FTS5 query syntax
 ./memepoetry.py lookup --url "https://www.instagram.com/p/XXXX/"
 ./memepoetry.py compose --query "grief" --lines 5 --seed 42
@@ -64,7 +65,15 @@ ignored): `{"text": ..., "url": ..., "account"?, "platform"?, "post_type"?,
   (`https://www.instagram.com/p/<shortcode>/` or `/reel/<shortcode>/`) into
   `add`, or batch sightings in a JSONL file and `import` them.
 - Post URLs are stable canonical IDs — store the `/p/` or `/reel/` form, not
-  a feed or story URL.
+  a feed or story URL. Instagram links are canonicalized automatically on
+  `add`/`import`/`lookup`: tracking query strings, mobile and bare hosts,
+  username prefixes, and the `/reels/`/`/tv/` aliases all collapse to
+  `https://www.instagram.com/{p,reel}/<shortcode>/`, so the same post pasted
+  two ways dedupes to one sighting (`canon` previews the rewrite). Opaque
+  `/share/...` links hide the shortcode behind a redirect; pass `--resolve`
+  to look them up over the network — via the official oEmbed endpoint when
+  `INSTAGRAM_OEMBED_TOKEN` is set (a Facebook app token with oEmbed Read),
+  otherwise by following the redirect.
 - Found poetry made from these lines is a derivative use of other people's
   words; the footnoted-URL output of `compose` exists so attribution travels
   with every draft.

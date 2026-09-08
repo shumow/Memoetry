@@ -16,6 +16,7 @@ Usage examples:
   ./memepoetry.py add --text "i want to kiss your scars" \
       --url "https://www.instagram.com/p/XXXX/" --account wannakissyourscars
   ./memepoetry.py import seed.jsonl
+  ./memepoetry.py canon "https://instagram.com/reels/XXXX/?igsh=abc"
   ./memepoetry.py search "scars"
   ./memepoetry.py compose --query "night OR stars" --lines 5
   ./memepoetry.py export > backup.jsonl
@@ -23,11 +24,14 @@ Usage examples:
 
 import argparse
 import json
+import os
 import random
 import re
 import sqlite3
 import sys
 import unicodedata
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -106,6 +110,76 @@ def guess_platform(url: str) -> str | None:
     return None
 
 
+# Post paths, optionally prefixed with a username segment ("/user/p/CODE/").
+# /reels/ and /tv/ are historical aliases that redirect to /reel/.
+_IG_POST_PATH = re.compile(r"^/(?:[^/]+/)?(p|reel|reels|tv)/([A-Za-z0-9_-]+)/?")
+
+
+def _instagram_path(url: str) -> str | None:
+    """Return the URL's path if it is an Instagram link, else None."""
+    parts = urllib.parse.urlsplit(url)
+    host = parts.netloc.lower().rsplit(":", 1)[0]
+    host = re.sub(r"^(www|m)\.", "", host)
+    return parts.path if host in ("instagram.com", "instagr.am") else None
+
+
+def canonicalize_url(url: str, resolve: bool = False) -> str:
+    """Normalize Instagram links to the stable /p/ or /reel/ shortcode form.
+
+    Pasted share links carry tracking query strings, mobile or bare hosts,
+    a leading username segment, or the /reels/ and /tv/ aliases; all of
+    those collapse to https://www.instagram.com/{p,reel}/<shortcode>/.
+    Opaque links (e.g. /share/...) hide the shortcode behind a redirect and
+    are only rewritten when resolve=True permits a network round trip.
+    Non-Instagram URLs pass through unchanged.
+    """
+    url = url.strip()
+    path = _instagram_path(url)
+    if path is None:
+        return url
+    m = _IG_POST_PATH.match(path)
+    # "/share/p/<token>" carries an opaque share token, not the shortcode.
+    if m and path.split("/")[1] != "share":
+        kind = "p" if m.group(1) == "p" else "reel"
+        return f"https://www.instagram.com/{kind}/{m.group(2)}/"
+    if resolve:
+        resolved = _resolve_instagram_url(url)
+        if resolved:
+            return canonicalize_url(resolved)
+    return url
+
+
+def _resolve_instagram_url(url: str) -> str | None:
+    """Resolve an opaque Instagram link to its permalink over the network.
+
+    Prefers the official oEmbed endpoint when INSTAGRAM_OEMBED_TOKEN is set
+    (a Facebook app token with oEmbed Read; the response's embed HTML names
+    the permalink), otherwise follows the link's redirect.
+    """
+    token = os.environ.get("INSTAGRAM_OEMBED_TOKEN")
+    if token:
+        api = ("https://graph.facebook.com/v23.0/instagram_oembed?"
+               + urllib.parse.urlencode({"url": url, "omitscript": "true",
+                                         "access_token": token}))
+        try:
+            with urllib.request.urlopen(api, timeout=10) as resp:
+                html = json.load(resp).get("html", "")
+            m = re.search(r'data-instgrm-permalink="([^"?#]+)', html)
+            if m:
+                return m.group(1)
+        except OSError as e:
+            print(f"oembed lookup failed ({e}); trying redirect",
+                  file=sys.stderr)
+    req = urllib.request.Request(
+        url, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.url
+    except OSError as e:
+        print(f"could not resolve {url} ({e})", file=sys.stderr)
+        return None
+
+
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
@@ -116,11 +190,13 @@ def connect(db_path: Path) -> sqlite3.Connection:
 
 
 def add_entry(conn, text, url, platform=None, account=None, post_type=None,
-              notes=None):
+              notes=None, resolve=False):
     """Insert a sighting; dedupes on normalized text and on (sentence, url).
 
+    URLs are canonicalized first so the same post pasted two ways dedupes.
     Returns (sentence_id, created_sentence, created_source).
     """
+    url = canonicalize_url(url, resolve=resolve)
     norm = normalize(text)
     if not norm:
         raise ValueError(f"sentence is empty after normalization: {text!r}")
@@ -159,7 +235,8 @@ def cmd_init(args, conn):
 def cmd_add(args, conn):
     sid, new_s, new_u = add_entry(
         conn, args.text, args.url, platform=args.platform,
-        account=args.account, post_type=args.post_type, notes=args.notes)
+        account=args.account, post_type=args.post_type, notes=args.notes,
+        resolve=args.resolve)
     conn.commit()
     state = ("new sentence" if new_s else
              "known sentence, new URL" if new_u else
@@ -180,7 +257,8 @@ def cmd_import(args, conn):
                 _, new_s, new_u = add_entry(
                     conn, rec["text"], rec["url"],
                     platform=rec.get("platform"), account=rec.get("account"),
-                    post_type=rec.get("post_type"), notes=rec.get("notes"))
+                    post_type=rec.get("post_type"), notes=rec.get("notes"),
+                    resolve=args.resolve)
             except (json.JSONDecodeError, KeyError, ValueError) as e:
                 print(f"line {lineno}: skipped ({e})", file=sys.stderr)
                 skipped += 1
@@ -229,7 +307,7 @@ def cmd_lookup(args, conn):
         rows = conn.execute(
             """SELECT DISTINCT s.id, s.text FROM sources src
                JOIN sentences s ON s.id = src.sentence_id
-               WHERE src.url = ?""", (args.url,)).fetchall()
+               WHERE src.url = ?""", (canonicalize_url(args.url),)).fetchall()
     else:
         rows = conn.execute(
             "SELECT id, text FROM sentences WHERE text_norm = ?",
@@ -291,9 +369,18 @@ def main(argv=None):
     sp.add_argument("--account", help="handle without the @")
     sp.add_argument("--post-type", choices=["image", "reel", "carousel"])
     sp.add_argument("--notes")
+    sp.add_argument("--resolve", action="store_true",
+                    help="resolve opaque Instagram share links over the network")
 
     sp = sub.add_parser("import", help="bulk import JSONL (text,url,... per line)")
     sp.add_argument("file", help="path, or - for stdin")
+    sp.add_argument("--resolve", action="store_true",
+                    help="resolve opaque Instagram share links over the network")
+
+    sp = sub.add_parser("canon", help="print a URL's canonical form")
+    sp.add_argument("url")
+    sp.add_argument("--resolve", action="store_true",
+                    help="resolve opaque Instagram share links over the network")
 
     sub.add_parser("export", help="dump the corpus as JSONL to stdout")
 
@@ -314,6 +401,9 @@ def main(argv=None):
     sub.add_parser("stats", help="corpus summary")
 
     args = p.parse_args(argv)
+    if args.cmd == "canon":  # needs no database
+        print(canonicalize_url(args.url, resolve=args.resolve))
+        return
     if getattr(args, "seed", None) is not None:
         random.seed(args.seed)
     conn = connect(args.db)
