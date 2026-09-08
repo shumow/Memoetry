@@ -1,0 +1,6 @@
+# Example records showing the import format. URLs are placeholders, not real
+# posts — replace with entries you collect yourself. One JSON object per line.
+{"text": "the moon understood what I could not say", "url": "https://www.instagram.com/p/EXAMPLE1/", "account": "exampleaccount", "post_type": "image"}
+{"text": "we were a museum of almosts", "url": "https://www.instagram.com/reel/EXAMPLE2/", "account": "exampleaccount", "post_type": "reel"}
+{"text": "grief is just love with nowhere to go", "url": "https://www.instagram.com/p/EXAMPLE3/", "account": "anotheraccount", "post_type": "image", "notes": "widely reposted; earliest sighting I have"}
+{"text": "grief is just love with nowhere to go", "url": "https://www.tumblr.com/exampleblog/EXAMPLE4", "account": "exampleblog", "post_type": "image", "notes": "same line, second sighting — dedupe demo"}

@@ -1,0 +1,73 @@
+# memoetry
+
+A sentence → URL database for the "one poetic line over a picture/reel"
+Instagram genre (e.g. @wannakissyourscars, @VictorianPoetry), plus a small
+CLI for searching the corpus and drafting found poetry from it.
+
+## What the trend is called
+
+There is no single settled name; the genre sits at the intersection of a few
+named things:
+
+- **Instapoetry / micropoetry** — the umbrella terms for short poetry native
+  to Instagram; a single aphoristic line is the micro end of it.
+- **Web weaving** (Tumblr, 2019; revived on TikTok as **quote dumps**) — the
+  curatorial practice of collecting poetic fragments over images. The
+  single-image, single-sentence post is essentially a one-slide web weaving.
+- **Hopecore / corecore** — the reel-editing aesthetic these accounts use:
+  one emotionally loaded line over found footage with an ambient song.
+- **Image macro** is the old, format-level term for any text-over-image meme;
+  these accounts are the literary register of it.
+
+If you need one label for the corpus, "micro instapoetry" or "one-line web
+weaving" communicates it best.
+
+## Data model
+
+SQLite (single file, `data/memepoetry.sqlite3`) with FTS5 full-text search:
+
+- `sentences` — one row per distinct line. Deduplication is by a normalized
+  form (NFKC, casefolded, whitespace collapsed, surrounding punctuation and
+  emoji stripped), so "The moon 🌙" and "the moon." are the same sentence.
+- `sources` — one row per (sentence, URL) sighting. The same line circulating
+  on many accounts is the normal case in this genre, and tracking *all* its
+  URLs is the interesting part (provenance, spread, earliest sighting).
+- `sentences_fts` — FTS5 index kept in sync by triggers.
+
+## Usage
+
+```sh
+./memepoetry.py init
+./memepoetry.py add --text "we were a museum of almosts" \
+    --url "https://www.instagram.com/p/XXXX/" --account someaccount --post-type reel
+./memepoetry.py import seed.example.jsonl     # bulk JSONL, or `-` for stdin
+./memepoetry.py search "moon OR stars"        # FTS5 query syntax
+./memepoetry.py lookup --url "https://www.instagram.com/p/XXXX/"
+./memepoetry.py compose --query "grief" --lines 5 --seed 42
+./memepoetry.py export > backup.jsonl
+./memepoetry.py stats
+```
+
+`compose` drafts a found poem: it samples lines (optionally restricted to an
+FTS match) and prints each source URL as a footnote, so every published poem
+can carry attribution.
+
+JSONL import format, one object per line (`#` comments and blank lines
+ignored): `{"text": ..., "url": ..., "account"?, "platform"?, "post_type"?,
+"notes"?}`. Platform is inferred from the URL when omitted.
+
+## On collecting the data
+
+- **Manual/curated entry is the intended path.** Instagram's terms prohibit
+  automated scraping, and logged-out access is blocked anyway. The workflow
+  this supports: as you browse, copy the line and the post's share URL
+  (`https://www.instagram.com/p/<shortcode>/` or `/reel/<shortcode>/`) into
+  `add`, or batch sightings in a JSONL file and `import` them.
+- Post URLs are stable canonical IDs — store the `/p/` or `/reel/` form, not
+  a feed or story URL.
+- Found poetry made from these lines is a derivative use of other people's
+  words; the footnoted-URL output of `compose` exists so attribution travels
+  with every draft.
+
+The database file itself is gitignored; `export` to JSONL for anything you
+want to version or share.
