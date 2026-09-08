@@ -16,6 +16,11 @@ Leftovers from moving this project out of PRIMES-Conjectures (2026-09-08).
       the branch-delete push is blocked by the remote session's egress policy
       (HTTP 403), so it also stays manual: delete it from the branches page or
       run `git push origin --delete claude/meme-poetry-database-4pn6ff`.*
+- [ ] Delete the branch `claude/loose-ends-tasks-5uzjlk` in this repo. Its
+      work was fast-forwarded into `main` (a8283b4) on 2026-09-08, so it is
+      inert; branch-delete pushes are blocked from remote sessions (same
+      HTTP 403 as above), so delete it from the branches page or run
+      `git push origin --delete claude/loose-ends-tasks-5uzjlk`.
 
 ## Notes
 
