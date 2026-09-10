@@ -41,7 +41,9 @@ SQLite (single file, `data/memepoetry.sqlite3`) with FTS5 full-text search:
 ./memepoetry.py add --text "we were a museum of almosts" \
     --url "https://www.instagram.com/p/XXXX/" --account someaccount --post-type reel
 ./memepoetry.py import seed.example.jsonl     # bulk JSONL, or `-` for stdin
+./memepoetry.py ingest-export instagram-export.zip   # Meta DYI saved posts
 ./memepoetry.py canon "https://instagram.com/reels/XXXX/?igsh=abc"
+./memepoetry.py fetch "https://www.instagram.com/p/XXXX/"  # oEmbed metadata
 ./memepoetry.py search "moon OR stars"        # FTS5 query syntax
 ./memepoetry.py lookup --url "https://www.instagram.com/p/XXXX/"
 ./memepoetry.py compose --query "grief" --lines 5 --seed 42
@@ -59,11 +61,29 @@ ignored): `{"text": ..., "url": ..., "account"?, "platform"?, "post_type"?,
 
 ## On collecting the data
 
-- **Manual/curated entry is the intended path.** Instagram's terms prohibit
-  automated scraping, and logged-out access is blocked anyway. The workflow
-  this supports: as you browse, copy the line and the post's share URL
-  (`https://www.instagram.com/p/<shortcode>/` or `/reel/<shortcode>/`) into
-  `add`, or batch sightings in a JSONL file and `import` them.
+- **Curated entry through official channels is the intended path.**
+  Instagram's terms prohibit automated scraping, and logged-out access is
+  blocked anyway. Two workflows this supports:
+  - As you browse, copy the line and the post's share URL
+    (`https://www.instagram.com/p/<shortcode>/` or `/reel/<shortcode>/`)
+    into `add`, or batch sightings in a JSONL file and `import` them.
+  - **The saved-posts funnel**: tap *Save* on posts as you scroll, then
+    periodically request Meta's "Download your information" export (scoped
+    to Instagram → Saved is enough, JSON format) and run
+    `ingest-export` on the zip. Each new URL is enriched via the official
+    oEmbed API — account from `author_name`, the line from the caption
+    (first line that survives stripping hashtags/@credits), tagged
+    `notes: "text from caption via oEmbed (unverified)"` since the caption
+    may differ from the image overlay. Posts whose caption yields no usable
+    line (or that oEmbed can't serve) are appended to `pending.jsonl`;
+    fill in their `"text"` by hand and `import` the file. Reruns are
+    incremental: URLs already in the database or in `pending.jsonl` are
+    skipped. `--liked` also ingests liked posts, `--limit`/`--sleep`
+    keep API usage polite, `--dry-run` previews.
+- `add --url <url>` without `--text` does the same single-post enrichment,
+  and `fetch <url>` prints the raw oEmbed record. oEmbed works tokenless
+  for public posts (again, since mid-2026); set `INSTAGRAM_OEMBED_TOKEN`
+  (a Facebook app token) to use the token lane and its higher rate limits.
 - Post URLs are stable canonical IDs — store the `/p/` or `/reel/` form, not
   a feed or story URL. Instagram links are canonicalized automatically on
   `add`/`import`/`lookup`: tracking query strings, mobile and bare hosts,

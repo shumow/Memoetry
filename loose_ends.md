@@ -30,9 +30,12 @@ Leftovers from moving this project out of PRIMES-Conjectures (2026-09-08).
 
 ## Possible next steps
 
-- [ ] Seed the corpus with real sightings (`./memepoetry.py import`).
-      *Needs hand-collected data (see README, "On collecting the data") —
-      copy lines and share URLs as you browse; nothing to automate here.*
+- [ ] Seed the corpus with real sightings.
+      *Tooling now exists (2026-09-10): tap Save on posts as you browse,
+      request Meta's "Download your information" export (Instagram → Saved,
+      JSON), then `./memepoetry.py ingest-export <export.zip>` — oEmbed
+      fills in text/account; leftovers land in `pending.jsonl` for hand
+      entry. What remains is actually doing the browsing + export.*
 - [x] Instagram oEmbed-based URL canonicalizer, so pasted share links get
       normalized to the stable `/p/<shortcode>/` or `/reel/<shortcode>/` form.
       *Done 2026-09-08: `canonicalize_url()` runs on `add`/`import`/`lookup`,
